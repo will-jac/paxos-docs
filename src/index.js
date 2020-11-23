@@ -2,11 +2,15 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 import App from './App';
+import PeerMessenger from './paxos2/PeerMessenger';
+
 import reportWebVitals from './reportWebVitals';
+
+const peer = new PeerMessenger()
 
 ReactDOM.render(
   <React.StrictMode>
-    <App />
+    <App peer={peer}/>
   </React.StrictMode>,
   document.getElementById('root')
 );
