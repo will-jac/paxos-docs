@@ -25,6 +25,7 @@ class PaxosNode {
         this.acquiring = false;
         this.leaderUID = this.uid;
 
+        this.period = 2
         //TODO: leadership
 
         // Acceptor
@@ -119,7 +120,7 @@ class PaxosNode {
      * @param {*} prevAcceptedID
      * @param {*} precAcceptedDecree
      */
-    recvPromise(fromUID, ballotID, prevAcceptedID, prevAcceptedDecree, prevSlotNum) {
+    recvPromise(fromUID, ballotID, prevAcceptedID, prevAcceptedDecree) {
         console.log('recv promise', fromUID, ballotID, prevAcceptedID, prevAcceptedDecree)
 
         // if someone else is passing messages around, see if we need to increment our ballotNum
@@ -139,19 +140,21 @@ class PaxosNode {
 
             if (this.promisesRecieved.size === this.quorumSize) {
                 // determine slot numbers & populate proposals
-                if (!this.prevMax[prevSlotNum] || this.prevMax[prevSlotNum] < prevAcceptedID) {
-                    this.prevMax[prevSlotNum] = prevAcceptedID
-                    this.proposals[prevSlotNum] = precAcceptedDecree
-                }
-                // span commander
-                for (var ballot in this.proposals) {
-                }
+                // if (!this.prevMax[prevSlotNum] || this.prevMax[prevSlotNum] < prevAcceptedID) {
+                //     this.prevMax[prevSlotNum] = prevAcceptedID
+                //     this.proposals[prevSlotNum] = prevAcceptedDecree
+                // }
+                // // span commander
+                // for (var ballot in this.proposals) {
+                // }
 
                 if (this.isLeader && this.decree !== null)
                     this.send('accept',this.ballotID, this.decree)
             }
         }
     }
+
+/* Paxos made moderately complex
     propose() {
         // iterate through the requests
         while (this.requests.length != 0 && this.slot_in < this.slot_out + PaxosNode.window) {
@@ -227,7 +230,9 @@ class PaxosNode {
             this.isLeader = false
         }
     }
-    addDecreeToQueue() {
+*/
+
+    addDecreeToQueue(decree) {
         if (this.nacks === null && this.decree === null) {
             // need to prepare
             this.decree = decree
@@ -278,7 +283,10 @@ class PaxosNode {
             // we aren't the leader, probably
             // TODO
             // this.messenger.whoIsLeader()
-            this.observeProposal(fromUID, promisedID)
+            //this.observeProposal(fromUID, promisedID)
+            if (fromUID !== this.uid) {
+                this.nextBallotNum = promisedID + 1
+            }
         }
     }
     //#endregion
@@ -436,7 +444,7 @@ class PaxosNode {
         if ( fromUID !== this.leaderUID) {//ballotID < this.leaderBallotID) { // ballotID < this.leaderBallotID
             // new leader!
             this.acquiring = false
-            var oldLeaderUID = this.leaderUID
+            // var oldLeaderUID = this.leaderUID
             this.leaderUID = fromUID
             this.leaderBallotID = ballotID
             if (this.isLeader && fromUID !== this.uid) {
@@ -459,7 +467,7 @@ class PaxosNode {
             // tell everyone we're still the leader
             this.send('heartbeat', this.ballotID)
             // call this function again after a sleep for 1 second
-            setTimeout(this.pulse.bind(this), this.period * 1000)
+            setTimeout(this.pulse.bind(this), 1000)
         }
     }
     acquireLeadership() {

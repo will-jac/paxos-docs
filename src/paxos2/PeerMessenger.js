@@ -57,6 +57,7 @@ export default class PeerMessenger {
         pn.onResolution = callback.bind(context)
         pn.send = this.send.bind(this)
 
+        pn.quorumSize = this.quorumSize
         this.setQuorumSize = pn.setQuorumSize.bind(pn)
 
         this.recvPrepare = pn.recvPrepare.bind(pn)
@@ -76,6 +77,11 @@ export default class PeerMessenger {
 
     }
 
+    setQuorumSize(size) {
+        this.quorumSize = size
+            console.log('quorum size (in peer messenger):', size)
+    }
+
     _connectTo(uid) {
         console.log('connect to:', uid);
         var conn = this.peer.connect(uid);
@@ -89,12 +95,12 @@ export default class PeerMessenger {
         conn.on('data', (msg) => {
             this.recvmsg(uid, msg);
         });
-        this.setQuorumSize(Math.floor(Object.keys(this._peers).length / 2) + 1, uid);
+        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, uid);
     }
 
     _disconnectFrom(uid) {
         delete this._peers[uid];
-        this.setQuorumSize(Math.floor(Object.keys(this._peers).length / 2) + 1, uid);
+        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, uid);
     }
 
     broadcast(msg) {
@@ -188,4 +194,11 @@ export default class PeerMessenger {
     //     console.log('leadershipChange', prevLeaderUID, newLeaderUID)
     //     this.conn.emit('leadershipChange', prevLeaderUID, newLeaderUID)
     // }
+    recvPrepare = () => {console.log('recv prepare in peer messenger')}
+    recvPromise = () => {console.log('recv promise in peer messenger')}
+    recvAccept = () => {console.log('recv accept in peer messenger')}
+    recvAccepted = () => {console.log('recv accepted in peer messenger')}
+    recvPrepareNack = () => {console.log('recv prepare nack in peer messenger')}
+    recvAcceptNack = () => {console.log('recv prepare nack in peer messenger')}
+    recvHeartbeat = () => {console.log('recv heartbeat in peer messenger')}
 }

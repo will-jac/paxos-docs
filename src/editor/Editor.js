@@ -40,7 +40,7 @@ class Editor extends React.Component {
   onchange(delta) {
     console.log(delta, this.editorRef.getEditor().getContents());
     //socket.emit('peer-msg', delta);
-    this.state.pn.propose(this.editorRef.getEditor().getContents());
+    this.state.pn.addDecreeToQueue(this.editorRef.getEditor().getContents());
   }
 
   render() {
