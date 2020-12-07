@@ -5,7 +5,7 @@ class PaxosNode {
         this.slot_in = 0
         this.slot_out = 0
 
-        this.proposals = []
+        this.proposals = new Set();
 
         this.quorumSize = 1
 
@@ -19,7 +19,7 @@ class PaxosNode {
         this.decree = null;
 
         this.requests = [];
-        this.decisions = [];
+        this.decisions = new Set();
 
         this.isLeader = true;
         this.acquiring = false;
@@ -27,6 +27,9 @@ class PaxosNode {
 
         this.period = 2
         //TODO: leadership
+
+        // Leader
+        this.accept = [];
 
         // Acceptor
         this.promisedID = null
@@ -47,6 +50,14 @@ class PaxosNode {
             this.acquireLeadership()
         }
     }
+    updateNewUser(uid) {
+        // if (this.decree !== null) {
+        //     this.send('init', uid, this.acceptedID, this.decree)
+        // }
+    }
+    recvUpdate(uid, acceptedID, decree) {
+       // this.recvAccepted(uid, acceptedID, decree)
+    }
     /**
      * Called by client (w/o message delay)
      * If this were decoupled on the client, this would be exported
@@ -64,6 +75,8 @@ class PaxosNode {
         // TODO: slots
         if (this.decree === null) {
             this.decree = decree
+        } else {
+            this.requests.push(decree)
         }
     }
     /**
@@ -148,13 +161,12 @@ class PaxosNode {
                 // for (var ballot in this.proposals) {
                 // }
 
-                if (this.isLeader && this.decree !== null)
-                    this.send('accept',this.ballotID, this.decree)
+                this.leaderOnAdopted(this.ballotID, )
             }
         }
     }
 
-/* Paxos made moderately complex
+//#region Paxos made moderately complex
     propose() {
         // iterate through the requests
         while (this.requests.length != 0 && this.slot_in < this.slot_out + PaxosNode.window) {
@@ -171,6 +183,7 @@ class PaxosNode {
             ++this.slot_in
         }
     }
+    // Unnecessary as the proposer isn't actually performing the decree
     perform(decree) {
         for (var i = 1; i < this.slot_out; ++i) {
             if (JSON.stringify(this.decisions[i]) === JSON.stringify(decree)) {
@@ -179,10 +192,15 @@ class PaxosNode {
             }
         }
         // TODO: reconfigure command
+
         // this is what the learner code is doing
+
         // TODO: perform command
         ++this.slot_out
     }
+
+    // entry point: call replica with msg.type="request", msg.decree set
+    // else: msg must have slot_num, type, decree
     replica(msg) {
         if (msg.type === 'request') {
             this.requests.push(msg.decree)
@@ -195,33 +213,46 @@ class PaxosNode {
                     }
                     delete this.proposals[this.slot_out]
                 }
-                this.perform(this.decisions[this.slot_out])
+                // this.perform(this.decisions[this.slot_out])
             }
         }
         this.propose()
     }
-    // scout = p1a, p1b
-    // commander = P2a, P2b
-    leader(msg) {
-        if (msg.type === 'propose') {
-            this.proposals[msg.slot_num] = msg.decree
+    // called when P1 is complete
+    leaderOnAdopted(ballotID, accepted) {
+        if (this.ballotID === ballotID) {
+            var pmax = {}
+            for (var pv in accepted) {
+                if (!(pv.slot_num in pmax) || (pmax[pv.slot_num] < pv.ballotID)) {
+                    pmax[pv.slot_num] = pv.ballotID
+                    this.proposals[pv.slot_num] = pv.decree
+                }
+            }
+            for (var slot_num in this.proposals) {
+                this.send('accept', this.ballotID, this.proposals[slot_num])
+                this.accept[slot_num].acceptors = new Set()
+                this.accept[slot_num].decree = this.proposals[slot_num]
+            }
+            this.isLeader = true
+        }
+    }
+    // Initiates P2 (leader's entry for fast paxos)
+    recvPropose(fromUID, slot_num, decree) {
+        if (!this.proposals[slot_num]) {
+            this.proposals[slot_num] = decree
             if (this.isLeader) {
-                // spawn commander
+                // TODO: spawn commander
+                this.send('accept',this.ballotID, this.decree)
+                this.accept[this.ballotID] = new Set()
+                this.accept[this.ballotID]['decree'] = this.decree
+                ++this.ballotID;
             }
-        } else if (msg.type === 'adopted') {
-            if (this.ballotID === msg.ballotID) {
-                var pmax = {}
-                for (var pv in msg.accepted) {
-                    if (!(pv.slot_num in pmax) || (pmax[pv.slot_num] < pv.ballotID)) {
-                        pmax[pv.slot_num] = pv.ballotID
-                        this.proposals[pv.slot_num] = pv.decree
-                    }
-                }
-                for (var sn in this.proposals) {
-                    // spawn commander
-                }
-                this.isLeader = true
-            }
+        }
+
+    }
+    leader(msg) {
+        if (msg.type === 'adopted') {
+
         } else if (msg.type === 'preempted') {
             if (msg.ballotID > this.ballotID) {
                 this.ballotID = msg.ballotID + 1
@@ -230,7 +261,7 @@ class PaxosNode {
             this.isLeader = false
         }
     }
-*/
+//#endregion
 
     addDecreeToQueue(decree) {
         if (this.nacks === null && this.decree === null) {
@@ -242,7 +273,7 @@ class PaxosNode {
             console.log('addDecreeToQueue', decree)
             this.requests.push(decree)
 
-            if (this.requests.length === 1 && this.decree === null) {
+            if (this.requests.length >= 1 && this.decree === null) {
                 this.startPhase2()
             }
         }
@@ -323,6 +354,9 @@ class PaxosNode {
 
         if (ballotID === null) {
             // fast round
+            this.promisedID = ballotID;
+            this.acceptedID = ballotID;
+            this.acceptedDecree = decree;
             this.send('accepted',null, decree)
         }
 

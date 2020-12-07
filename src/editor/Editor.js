@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactQuill from 'react-quill';
-import PaxosNode from './../paxos2/MultiPaxos';
+import PaxosNode from './../paxos2/PaxosMMC';
 
 import 'react-quill/dist/quill.snow.css';
 import 'react-quill/dist/quill.bubble.css';
@@ -40,7 +40,7 @@ class Editor extends React.Component {
   onchange(delta) {
     console.log(delta, this.editorRef.getEditor().getContents());
     //socket.emit('peer-msg', delta);
-    this.state.pn.addDecreeToQueue(this.editorRef.getEditor().getContents());
+    this.state.pn.request(this.editorRef.getEditor().getContents());
   }
 
   render() {

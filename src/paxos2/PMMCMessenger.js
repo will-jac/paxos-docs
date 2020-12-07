@@ -40,9 +40,10 @@ export default class PeerMessenger {
 
         this.peer.on('connection', (conn) => {
             console.log('connection from', conn.peer)
-            this._registerPeer(conn.peer, conn);
-            // this.emit('userconnected', conn.peer);
-            this.updateNewUser(conn.peer);
+            conn.on('open', () => {
+                this._registerPeer(conn.peer, conn, false);
+                // this.updateNewUser(conn.peer);
+            })
         });
 
         this.callback = () => {
@@ -53,6 +54,7 @@ export default class PeerMessenger {
     bindPaxosNode(pn, callback, context) {
 
         pn.uid = this.uid
+        pn.ballotID.uid = this.uid
         pn.leaderUID = this.uid
 
         pn.onResolution = callback.bind(context)
@@ -61,16 +63,18 @@ export default class PeerMessenger {
         pn.quorumSize = this.quorumSize
         this.setQuorumSize = pn.setQuorumSize.bind(pn)
 
+        this.recvPropose = pn.recvPropose.bind(pn)
         this.recvPrepare = pn.recvPrepare.bind(pn)
         this.recvPromise = pn.recvPromise.bind(pn)
         this.recvAccept = pn.recvAccept.bind(pn)
         this.recvAccepted = pn.recvAccepted.bind(pn)
-        this.recvPrepareNack = pn.recvPrepareNack.bind(pn)
-        this.recvAcceptNack = pn.recvAcceptNack.bind(pn)
+        this.recvPreempt = pn.recvPreempt.bind(pn)
+
+        // this.recvAcceptNack = pn.recvAcceptNack.bind(pn)
+        // this.recvPrepareNack = pn.recvPrepareNack.bind(pn)
+        // this.recvAcceptNack = pn.recvAcceptNack.bind(pn)
         this.recvHeartbeat = pn.recvHeartbeat.bind(pn)
 
-        this.recvUpdate = pn.recvUpdate.bind(pn)
-        this.updateNewUser = pn.updateNewUser.bind(pn)
         // this.decrementQuorum = function() {
         //     --this.quorumSize;
         // }.bind(pn)
@@ -78,36 +82,33 @@ export default class PeerMessenger {
         //     ++this.quorumSize;
         // }.bind(pn)
 
+
     }
 
     setQuorumSize(size) {
         this.quorumSize = size
-            console.log('quorum size (in peer messenger):', size)
+        console.log('quorum size (in peer messenger):', size)
     }
 
     _connectTo(uid) {
         console.log('connect to:', uid);
         var conn = this.peer.connect(uid);
         conn.on('open', () => {
-            this._registerPeer(uid, conn);
+            this._registerPeer(uid, conn, true);
         });
     }
 
-    _registerPeer(uid, conn) {
+    _registerPeer(uid, conn, isConnectingTo) {
         this._peers[uid] = conn;
         conn.on('data', (msg) => {
             this.recvmsg(uid, msg);
         });
-        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, uid);
+        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, isConnectingTo, uid);
     }
 
     _disconnectFrom(uid) {
         delete this._peers[uid];
-        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, uid);
-    }
-
-    updateNewUser(uid, conn) {
-        // Do nothing
+        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, false, uid);
     }
 
     broadcast(msg) {
@@ -140,6 +141,8 @@ export default class PeerMessenger {
             case 'heartbeat':   // bcast by proposer -> proposers
                 this.broadcast(JSON.stringify(Array.from(arguments)));
                 break;
+            case 'propose':     // replica -> leader
+            case 'preempt':     // acceptor -> leader
             case 'promise':     // sent from acceptor to proposer
             case 'prepareNack': // Acceptor -> proposer when prepare is bad
             case 'acceptNack':  // Acceptor -> proposer when Accept is bad
@@ -157,17 +160,23 @@ export default class PeerMessenger {
 
     recvmsg(uid, msg) {
         msg = JSON.parse(msg)
-        //console.log('recv', uid, msg);
+        // console.log('recv', uid, msg);
 
         switch(msg[0]) {
+            case 'propose':     // replica -> leader
+                this.recvPropose(msg[1], msg[2], msg[3]);
+                break;
+            case 'preempt':     // acceptor -> leader
+                this.recvPreempt(msg[1], msg[2]);
+                break;
             case 'prepare':     // broadcast by proposer to acceptors
                 this.recvPrepare(uid, msg[1]);
                 break;
             case 'accept':      // broadcast by proposer to acceptors
-                this.recvAccept(uid, msg[1], msg[2]);
+                this.recvAccept(uid, msg[1], msg[2], msg[3]);
                 break;
             case 'accepted':    // broadcast by acceptor to learner
-                this.recvAccepted(uid, msg[1], msg[2]);
+                this.recvAccepted(uid, msg[1], msg[2], msg[3]);
                 break;
             case 'heartbeat':   // bcast by proposer -> proposers
                 this.recvHeartbeat(uid, msg[1]);
@@ -178,9 +187,9 @@ export default class PeerMessenger {
             case 'prepareNack': // Acceptor -> proposer when prepare is bad
                 this.recvPrepareNack(uid, msg[2], msg[3]);
                 break;
-            case 'acceptNack':  // Acceptor -> proposer when Accept is bad
-                this.recvAcceptNack(uid, msg[2], msg[3])
-                break;
+            // case 'acceptNack':  // Acceptor -> proposer when Accept is bad
+            //     this.recvAcceptNack(uid, msg[2], msg[3])
+            //     break;
             case 'init':
                 this.recvInit(uid, msg[2], msg[3])
                 break;
