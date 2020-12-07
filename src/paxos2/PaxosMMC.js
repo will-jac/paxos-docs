@@ -6,7 +6,7 @@ class PaxosNode {
         this.slot_in = 0
         this.slot_out = 0
 
-        this.proposals = new Set();
+        this.proposals = {};
 
         this.quorumSize = 1
 
@@ -22,7 +22,7 @@ class PaxosNode {
         this.decree = null;
 
         this.requests = [];
-        this.decisions = new Set();
+        this.decisions = {};
 
         this.acquiring = false;
         // this leader set up makes it so that any change to the quorum triggers a leader change
@@ -34,7 +34,7 @@ class PaxosNode {
 
         // Leader
         this.acceptedSet = new Set();
-        this.leaderProposals = new Set()
+        this.leaderProposals = {};
 
         // Acceptor
         this.promisedID = {num: null, uid: null}
@@ -76,11 +76,16 @@ class PaxosNode {
 //#region Replica
     propose() {
         console.log('propose',  this.slot_in, this.slot_out, this.window, this.requests.length, this.requests)
+
+        // if slot_in is too far behind for us to propose anything, propose the null decree
+        if (this.slot_in >= this.slot_out + this.window) {
+            this.send('propose', this.leaderUID, this.slot_out, null)
+        }
+
         // iterate through the requests
 
         // console.log('requests', this.requests.length, r, this.requests)
         // console.log('slots:', this.slot_in, this.slot_out)
-
         while (this.requests.length !== 0 && (this.slot_in < this.slot_out + this.window)) {
             // console.log('working on',  this.slot_in)
             // if (this.slot_in > PaxosNode.window && this.slot_in - PaxosNode.window in this.decisions) {
@@ -259,32 +264,33 @@ class PaxosNode {
         console.log('recv promise', fromUID, ballotID, accepted)
 
         // if someone else is passing messages around, see if we need to increment our ballotNum
-        if (fromUID !== this.uid && ballotID.num >= this.nextBallotNum) {
-            this.nextBallotNum += ballotID.num + 1
+        if (ballotID.uid !== this.uid && ballotID.num >= this.ballotID.num) {
+            // console.log('incrementing nextBallotNum to', ballotID.num + 1)
+            this.nextBallotNum = ballotID.num + 1
         }
 
         // it's for the right ballot and we don't have it in the map yet
         if (ballotID.uid === this.ballotID.uid && ballotID.num === this.ballotID.num) {
-            if (!this.promisesRecieved[fromUID]) {
-                console.log('adding promise:', fromUID)
+            if (!this.promisesRecieved.has(fromUID)) {
+                // console.log('adding promise:', fromUID)
+                this.promisesRecieved.add(fromUID)
                 this.acceptedSet.add(accepted)
-
                 // if (prevAcceptedID > this.lastAcceptedID) {
                 //     this.lastAcceptedID = prevAcceptedID;
 
                 //     if (prevAcceptedDecree !== null)
                 //         this.decree = prevAcceptedDecree
                 // }
-                console.log('size:', Object.keys(this.promisesRecieved).length, this.isLeader)
-                if (Object.keys(this.promisesRecieved).length >= this.quorumSize && this.isLeader) {
-                    console.log('quorum of promises recv')
+                // console.log('size:', this.promisesRecieved.size, this.isLeader)
+                if (this.promisesRecieved.size >= this.quorumSize && this.isLeader) {
+                    // console.log('quorum of promises recv')
                     // TODO
                     this.leaderOnAdopted(this.ballotID, this.acceptedSet)
                 }
             }
         } else {
             // wrong uid.. try to become leader again
-            console.log('wrong ballotID...', ballotID)
+            // console.log('wrong ballotID...', ballotID, this.ballotID)
             this.acquireLeadership()
         }
     }
@@ -306,12 +312,14 @@ class PaxosNode {
                 this.send('accept', this.ballotID, slot_num, this.leaderProposals[slot_num])
             }
             this.isLeader = true
+            this.propose()
         }
     }
     // Initiates P2 (leader's entry for fast paxos)
     recvPropose(fromUID, slot_num, decree) {
         console.log('recv propose', slot_num, decree, this.leaderProposals, this.leaderProposals[slot_num])
-        if (!this.leaderProposals[slot_num]) {
+        // new proposal or overwriting null decree
+        if (!this.leaderProposals[slot_num] || this.leaderProposals[slot_num] === null) {
             console.log('new proposal for slot_num')
             this.leaderProposals[slot_num] = decree
             // if the size is 1, acquire leadership
@@ -351,7 +359,7 @@ class PaxosNode {
      * @param {BallotID} ballotID
      */
     recvPrepare(fromUID, ballotID) {
-        console.log('recv prepare', fromUID, ballotID);
+        console.log('recv prepare', fromUID, ballotID, this.promisedID);
 
         if (ballotID.num > this.promisedID.num ||
                 (ballotID.num === this.promisedID.num && ballotID.uid > this.promisedID.num))
@@ -378,8 +386,9 @@ class PaxosNode {
     recvAccept(fromUID, ballotID, slot_num, decree) {
         console.log('recv accept', fromUID, ballotID, slot_num, decree);
 
-        if (fromUID !== this.uid && ballotID.num <= this.nextBallotNum) {
+        if (ballotID.uid !== this.uid && ballotID.num <= this.nextBallotNum) {
             this.nextBallotNum = ballotID.num + 1
+            console.log('next ballot num:', this.nextBallotNum)
         }
 
         // TODO: use c structs here
