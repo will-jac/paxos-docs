@@ -39,6 +39,10 @@ class PaxosNode {
         // Learner
         this.ballots = null
     }
+    onLeaderChange(x) {
+        // do nothing (gets overridden by editor)
+        console.log("doing nothing, fun not overridden", x)
+    }
     send () {
         console.log('send', arguments)
     }
@@ -95,6 +99,7 @@ class PaxosNode {
         }
 
         this.isLeader = true;
+        this.onLeaderChange(this.isLeader)
         //console.log('send prepare', this.ballotID);
         this.send('prepare',this.ballotID);
     }
@@ -234,6 +239,7 @@ class PaxosNode {
                 this.accept[slot_num].decree = this.proposals[slot_num]
             }
             this.isLeader = true
+            this.onLeaderChange(this.isLeader)
         }
     }
     // Initiates P2 (leader's entry for fast paxos)
@@ -259,6 +265,7 @@ class PaxosNode {
                 // spawn scout
             }
             this.isLeader = false
+            this.onLeaderChange(this.isLeader)
         }
     }
 //#endregion
@@ -308,6 +315,7 @@ class PaxosNode {
 
         if (this.isLeader && this.nacks.size >= this.quorumSize) {
             this.isLeader = false
+            this.onLeaderChange(this.isLeader)
             this.promisesRecieved = new Set()
             this.leaderUID = null
             this.leaderBallotID = null
@@ -436,6 +444,9 @@ class PaxosNode {
                 console.log('leader is:', this.leaderUID)
 
                 this.isLeader = this.leaderUID === this.uid
+                // for the crown display
+                this.onLeaderChange(this.isLeader)
+
                 this.acquiring = false
 
                 if (this.isLeader) {
@@ -483,6 +494,7 @@ class PaxosNode {
             this.leaderBallotID = ballotID
             if (this.isLeader && fromUID !== this.uid) {
                 this.isLeader = false
+                this.onLeaderChange(this.isLeader)
                 //this.messenger.onLeadershipLost()
                 //this.observeProposal(fromUID, ballotID)
                 this.nextBallotNum = ballotID + 1

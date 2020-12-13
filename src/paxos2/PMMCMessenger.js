@@ -75,6 +75,7 @@ export default class PeerMessenger {
         // this.recvAcceptNack = pn.recvAcceptNack.bind(pn)
         this.recvHeartbeat = pn.recvHeartbeat.bind(pn)
 
+        this.onDecision = pn.onDecision.bind(pn)
         // this.decrementQuorum = function() {
         //     --this.quorumSize;
         // }.bind(pn)
@@ -103,12 +104,14 @@ export default class PeerMessenger {
         conn.on('data', (msg) => {
             this.recvmsg(uid, msg);
         });
-        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, isConnectingTo, uid);
+        var n = Object.keys(this._peers).length + 1
+        this.setQuorumSize(Math.ceil(n / 2) + 1, n, isConnectingTo, uid);
     }
 
     _disconnectFrom(uid) {
         delete this._peers[uid];
-        this.setQuorumSize(Math.ceil(Object.keys(this._peers).length / 2) + 1, false, uid);
+        var n = Object.keys(this._peers).length + 1
+        this.setQuorumSize(Math.ceil(n / 2) + 1, n, false, uid);
     }
 
     broadcast(msg) {
@@ -146,6 +149,7 @@ export default class PeerMessenger {
             case 'promise':     // sent from acceptor to proposer
             case 'prepareNack': // Acceptor -> proposer when prepare is bad
             case 'acceptNack':  // Acceptor -> proposer when Accept is bad
+            case 'decided':    // when a propose comes for a slot that's already been decided
             case 'init':
                 //console.log(arguments[1])
                 this._send(arguments[1], JSON.stringify(Array.from(arguments)));
@@ -164,7 +168,7 @@ export default class PeerMessenger {
 
         switch(msg[0]) {
             case 'propose':     // replica -> leader
-                this.recvPropose(msg[1], msg[2], msg[3]);
+                this.recvPropose(uid, msg[2], msg[3]);
                 break;
             case 'preempt':     // acceptor -> leader
                 this.recvPreempt(msg[1], msg[2]);
@@ -192,6 +196,9 @@ export default class PeerMessenger {
             //     break;
             case 'init':
                 this.recvInit(uid, msg[2], msg[3])
+                break;
+            case 'decided':
+                this.onDecision(msg[2], msg[3])
                 break;
             default:
                 console.log('error finding match', msg)

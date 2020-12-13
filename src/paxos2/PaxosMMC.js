@@ -48,19 +48,21 @@ class PaxosNode {
     send () {
         console.log('send', arguments)
     }
-    setQuorumSize(size, joined, uidJoinedOrDied) {
+    setQuorumSize(size, num_connected, joined, uidJoinedOrDied) {
         console.log('quorum size is:', size)
         this.quorumSize = size
         if (uidJoinedOrDied === this.leaderUID || (size === 1 && !this.isLeader))
         {
-            console.log('acquiring leadership')
+            console.log('acquiring leadership on setQurumSize')
             this.isLeader = true
+            this.onLeaderChange(this.isLeader)
             this.leaderUID = this.uid
             this.acquireLeadership()
         } else if (joined) {
             console.log('new user, died ID is:', uidJoinedOrDied)
             this.updateNewUser()
         }
+        this.setNumConnected(num_connected)
     }
     updateNewUser() {
         console.log('updating new user')
@@ -72,14 +74,25 @@ class PaxosNode {
             })
         }
     }
+
+    // when anyone joins, immediately pass window # of null decrees
+    passOliveDecrees() {
+        if (this.isLeader) {
+            for (var i = 0; i < this.window; i++) {
+                this.requests.unshift(null)
+            }
+            this.propose()
+        }
+    }
 //#region Paxos made moderately complex
 //#region Replica
     propose() {
-        console.log('propose',  this.slot_in, this.slot_out, this.window, this.requests.length, this.requests)
+        console.log('propose',  this.slot_in, this.slot_out, this.window, this.requests.length, this.requests, this.ballotID)
 
-        // if slot_in is too far behind for us to propose anything, propose the null decree
+        // if slot_out is too far behind for us to propose anything, propose the null decree to fill it
         if (this.slot_in >= this.slot_out + this.window) {
-            this.send('propose', this.leaderUID, this.slot_out, null)
+            this.send('propose', this.leaderUID, this.slot_out, null);
+            ++this.slot_in;
         }
 
         // iterate through the requests
@@ -94,13 +107,13 @@ class PaxosNode {
             // }
             // if we haven't already decided one
             if (!this.decisions[this.slot_in]) {
-                var decree = this.requests.shift()
+                var decree = this.requests.shift();
                 // console.log('requests', this.requests.length, r, this.requests)
                 // console.log('setting proposal', this.decisions[this.slot_in], this.slot_in, decree)
-                this.proposals[this.slot_in] = decree
-                this.send('propose', this.leaderUID, this.slot_in, decree)
+                this.proposals[this.slot_in] = decree;
+                this.send('propose', this.leaderUID, this.slot_in, decree);
             }
-            ++this.slot_in
+            ++this.slot_in;
         }
     }
     // this is the entry point
@@ -110,7 +123,7 @@ class PaxosNode {
         this.propose()
     }
     onDecision(slot_num, decree) {
-        console.log('onDecision', slot_num, decree)
+        console.log('onDecision', slot_num, decree, this.slot_out)
         this.decisions[slot_num] = decree
         while (this.decisions[this.slot_out]) {
             if (this.proposals[this.slot_out]) {
@@ -130,6 +143,7 @@ class PaxosNode {
             }
             ++this.slot_out
         }
+        // console.log(this.decisions)
         this.propose()
     }
     recvAccepted(fromUID, ballotID, slotNum, decree) {
@@ -192,9 +206,10 @@ class PaxosNode {
                 if (decree.type === 'leader') {
                     console.log('leader message:', decree.leaderUID)
                     this.leaderUID = decree.leaderUID
-                    console.log('leader is:', this.leaderUID)
+                    console.log('leader is:', this.leaderUID, this.uid, this.leaderUID === this.uid)
 
                     this.isLeader = (this.leaderUID === this.uid)
+                    this.onLeaderChange(this.isLeader)
                     this.acquiring = false
 
                     if (this.isLeader) {
@@ -206,6 +221,7 @@ class PaxosNode {
                     this.leaderUID = decree.leaderUID
 
                     this.isLeader = (this.leaderUID === this.uid)
+                    this.onLeaderChange(this.isLeader)
                     this.acquiring = false
 
                     this.decisions = JSON.parse(decree.decisions)
@@ -236,17 +252,17 @@ class PaxosNode {
      * (implicit leadership acquisition)
      * @param {boolean} incrementProposalNumber
      */
-    prepare(incrementProposalNumber = true) {
+    prepare() {
+        console.log('prepare', this.ballotID, this.nextBallotNum)
         this.nacks = new Set();
 
-        if (incrementProposalNumber) {
-            this.promisesRecieved = new Set();
-            this.acceptedSet = new Set();
-            this.ballotID.num = this.nextBallotNum
-            ++this.nextBallotNum;
-        }
+        this.promisesRecieved = new Set();
+        this.acceptedSet = new Set();
+        this.ballotID.num = this.nextBallotNum;
+        ++this.nextBallotNum;
 
         this.isLeader = true;
+        this.onLeaderChange(this.isLeader)
         //console.log('send prepare', this.ballotID);
         this.send('prepare', this.ballotID);
     }
@@ -265,7 +281,7 @@ class PaxosNode {
 
         // if someone else is passing messages around, see if we need to increment our ballotNum
         if (ballotID.uid !== this.uid && ballotID.num >= this.ballotID.num) {
-            // console.log('incrementing nextBallotNum to', ballotID.num + 1)
+            console.log('incrementing nextBallotNum to', ballotID.num + 1)
             this.nextBallotNum = ballotID.num + 1
         }
 
@@ -289,9 +305,16 @@ class PaxosNode {
                 }
             }
         } else {
-            // wrong uid.. try to become leader again
-            // console.log('wrong ballotID...', ballotID, this.ballotID)
-            this.acquireLeadership()
+            // wrong uid... wait for a small amount of time then try to become leader again
+
+            console.log('wrong ballotID...', ballotID, this.ballotID)
+            this.leaderUID = null;
+            setTimeout(() => {
+                if (this.leaderUID === null) {
+                    this.acquireLeadership()
+                }
+            }, 100)
+
         }
     }
 //#endregion
@@ -312,12 +335,13 @@ class PaxosNode {
                 this.send('accept', this.ballotID, slot_num, this.leaderProposals[slot_num])
             }
             this.isLeader = true
+            this.onLeaderChange(this.isLeader)
             this.propose()
         }
     }
     // Initiates P2 (leader's entry for fast paxos)
     recvPropose(fromUID, slot_num, decree) {
-        console.log('recv propose', slot_num, decree, this.leaderProposals, this.leaderProposals[slot_num])
+        console.log('recv propose', fromUID, slot_num, decree, this.leaderProposals, this.leaderProposals[slot_num])
         // new proposal or overwriting null decree
         if (!this.leaderProposals[slot_num] || this.leaderProposals[slot_num] === null) {
             console.log('new proposal for slot_num')
@@ -325,6 +349,7 @@ class PaxosNode {
             // if the size is 1, acquire leadership
             if (this.quorumSize === 1) {
                 this.isLeader = true
+                this.onLeaderChange(this.isLeader)
             }
             if (this.isLeader) {
                 // TODO: spawn commander
@@ -332,7 +357,9 @@ class PaxosNode {
             }
         }
         else {
+            // slot already known - send decision
             console.log(this.leaderProposals[slot_num])
+            this.send('decided', fromUID, slot_num, this.leaderProposals[slot_num])
         }
         // else {
         //     this.send('proposeNack', fromUID, this.)
@@ -342,6 +369,7 @@ class PaxosNode {
     recvPreempt(ballotID) {
         console.log('recv Preempt')
         this.isLeader = false
+        this.onLeaderChange(this.isLeader)
         if (ballotID.num >= this.ballotID.num) {
             console.log('preparing')
             this.ballotID.num = ballotID + 1
@@ -362,11 +390,12 @@ class PaxosNode {
         console.log('recv prepare', fromUID, ballotID, this.promisedID);
 
         if (ballotID.num > this.promisedID.num ||
-                (ballotID.num === this.promisedID.num && ballotID.uid > this.promisedID.num))
+                (ballotID.num === this.promisedID.num && ballotID.uid > this.promisedID.uid))
         {
             // update our own ballotID in case we need to be the leader later
             this.nextBallotNum = ballotID.num + 1
             this.promisedID = ballotID
+            console.log('prepare: set nextBallotNum to ', this.nextBallotNum)
         }
         this.send('promise', fromUID, this.promisedID, this.accepted)
         // else {
@@ -386,9 +415,11 @@ class PaxosNode {
     recvAccept(fromUID, ballotID, slot_num, decree) {
         console.log('recv accept', fromUID, ballotID, slot_num, decree);
 
-        if (ballotID.uid !== this.uid && ballotID.num <= this.nextBallotNum) {
+        if (ballotID.uid !== this.uid && ballotID.num >= this.nextBallotNum) {
             this.nextBallotNum = ballotID.num + 1
             console.log('next ballot num:', this.nextBallotNum)
+        } else {
+            console.log('not incrementing nextBallotNum:', this.nextBallotNum)
         }
 
         // TODO: use c structs here
@@ -448,6 +479,7 @@ class PaxosNode {
             this.leaderBallotID = ballotID
             if (this.isLeader && fromUID !== this.uid) {
                 this.isLeader = false
+                this.onLeaderChange(this.isLeader)
                 //this.messenger.onLeadershipLost()
                 //this.observeProposal(fromUID, ballotID)
                 this.nextBallotNum = ballotID.num + 1
