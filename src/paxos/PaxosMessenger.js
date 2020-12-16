@@ -70,19 +70,7 @@ export default class PeerMessenger {
         this.recvAccepted = pn.recvAccepted.bind(pn)
         this.recvPreempt = pn.recvPreempt.bind(pn)
 
-        // this.recvAcceptNack = pn.recvAcceptNack.bind(pn)
-        // this.recvPrepareNack = pn.recvPrepareNack.bind(pn)
-        // this.recvAcceptNack = pn.recvAcceptNack.bind(pn)
-        this.recvHeartbeat = pn.recvHeartbeat.bind(pn)
-
         this.onDecision = pn.onDecision.bind(pn)
-        // this.decrementQuorum = function() {
-        //     --this.quorumSize;
-        // }.bind(pn)
-        // this.incrementQuorum = function() {
-        //     ++this.quorumSize;
-        // }.bind(pn)
-
 
     }
 
