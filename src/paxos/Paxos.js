@@ -73,7 +73,7 @@ class PaxosNode {
                 decisions: JSON.stringify(this.decisions)
             })
         }
-        this.passOliveDecrees()
+        // this.passOliveDecrees()
     }
     // when anyone joins, immediately pass window # of null decrees
     passOliveDecrees() {
@@ -211,10 +211,6 @@ class PaxosNode {
                     this.isLeader = (this.leaderUID === this.uid)
                     this.onLeaderChange(this.isLeader)
                     this.acquiring = false
-
-                    if (this.isLeader) {
-                        this.pulse();
-                    }
                 }
                 else if (decree.type === 'init') {
                     console.log('init: leader:', decree.leaderUID)

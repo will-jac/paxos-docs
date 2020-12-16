@@ -53,7 +53,7 @@ The actual Paxos implemnation is heavily inspired by three papers:
 
 It works most similarly to the implementation proposed in Paxos Made Simple.
 
-The Paxos Node acts simultaneously acts as a Replica, Acceptor, and Learner. At any time, one Replica will act as the Leader. Some high-level details of the system:
+The Paxos Node acts simultaneously acts as a Replica, Acceptor, and a Leader. At any time, one Replica will act as the Leader. Some high-level details of the system:
 
 * Upon initialization, a node will read any messages that have been sent before it finished initializing. In normal operation, if a leader has already been elected, one of these messages will be an initialization message from the leader, containing the set of decrees already decided and the current leader's UID. If a leader has not been determined (that is, no node considers itself a leader), the node joining will start a leader election by starting phase 1 of the Paxos protocol. When a leader joins or dies, a new leader election occurs in the same way: some node (or many nodes) will start phase 1, and the node that finishes first is the leader (having gained a promise from a quorum), and will pass a `leader` decree stating so. When multiple nodes begin phase 1 at the same time, ties are broken according to ballot ID, so the node with the largest UID will be the leader (assuming that the integer component of the ballot number is the same).
 * Any node will not attempt to pass decrees unless it has learned the previous five decrees.
@@ -62,6 +62,16 @@ The Paxos Node acts simultaneously acts as a Replica, Acceptor, and Learner. At 
 * All requests for a decree to be passed are sent to the leader, along with the proposed slot number (or decree number). If the slot number is unused, the leader will initiate phase 2 for the decree, otherwise, it will send the node the decree that was passed.
 
 Initially, I had planned on implementing [Fast Paxos](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2005-112.pdf), a variant of Paxos where (1) decrees are passed in two message delays and (2) the *state* is kept consistent, but the underlying sequence of operations can differ. However, due to issues with the Quill editor library (requires passing the entire state of the editor rather than a delta of what was changed) and difficulties implementing Fast Paxos (which seems to nearly double the number of corner cases present in Paxos!), I did not implement this.
+
+## Testing
+
+I employed three forms of testing:
+
+* Ad-hoc tests, which consisted of typing in the browser window and checking for correctness in a number of cases (such as the leader dying)
+* Command-line tests, which used the Paxos and PaxosMessenger javascript files to test that each component leads to the expected changes (see the `PaxosTests` files, which are manually validated from the console output)
+* Tests with failure, which are the above two along side a 'chaos monkey' that would randomly drop 25% of messages.
+
+All tests were for correctness, not performance. All tests ultimately passed, demonstrating that the project works as expected
 
 ## Running the project
 

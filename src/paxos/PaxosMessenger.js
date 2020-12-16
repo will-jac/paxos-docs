@@ -115,7 +115,12 @@ export default class PeerMessenger {
         if (uid === this.uid) {
             // send to self!
             this.recvmsg(this.uid, msg);
+            return
         }
+        // network dropper!
+        // if (Math.random() < 0.25) {
+        //     return
+        // }
         if (this._peers[uid] && this._peers[uid].open) {
             // console.log(peer, this._peers[peer])
             this._peers[uid].send(msg);
