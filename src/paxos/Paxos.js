@@ -73,8 +73,8 @@ class PaxosNode {
                 decisions: JSON.stringify(this.decisions)
             })
         }
+        passOliveDecrees()
     }
-
     // when anyone joins, immediately pass window # of null decrees
     passOliveDecrees() {
         if (this.isLeader) {
@@ -361,9 +361,6 @@ class PaxosNode {
             console.log(this.leaderProposals[slot_num])
             this.send('decided', fromUID, slot_num, this.leaderProposals[slot_num])
         }
-        // else {
-        //     this.send('proposeNack', fromUID, this.)
-        // }
     }
     // called when P2 is preempted
     recvPreempt(ballotID) {
@@ -374,9 +371,6 @@ class PaxosNode {
             console.log('preparing')
             this.ballotID.num = ballotID + 1
             this.acquireLeadership()
-
-            // scout
-            // this.prepare()
         }
 
     }
@@ -398,9 +392,6 @@ class PaxosNode {
             console.log('prepare: set nextBallotNum to ', this.nextBallotNum)
         }
         this.send('promise', fromUID, this.promisedID, this.accepted)
-        // else {
-        //     this.send('prepareNack',fromUID, ballotID, this.promisedID)
-        // }
     }
     /**
      * Step 4: voting
@@ -436,17 +427,6 @@ class PaxosNode {
             this.send('preempt', this.leaderUID, this.promisedID)
         }
     }
-    // recvAcceptNack(fromUID, ballotID, promisedID) {
-    //     // accept nack: someone else is leader, or we need to do a prepare again (because someone else was leader)
-    //     if (this.ballotID.num <= promisedID.num) {
-    //         this.ballotID.num += promisedID.num + 1
-    //     }
-    //     // move from proposals -> requests
-    //     for ()
-    //     this.requests.push
-    //     this.acquireLeadership()
-
-    // }
 //#endregion
 
 //#endregion
@@ -454,52 +434,6 @@ class PaxosNode {
     //#region leadership code
     leaderIsAlive() {
         return Date.now() - this.timeLastHB <= this.window
-    }
-    observedRecentPrepare() {
-        return Date.now() - this.timeLastPrep <= this.window * 1.5
-    }
-    pollLeader() {
-        console.log('polling leader', this.leaderIsAlive(), this.observedRecentPrepare())
-        if (!this.leaderIsAlive() && !this.observedRecentPrepare())
-            if (this.acquiring)
-                this.prepare()
-            else if (this.leaderIsAlive())
-                this.acquiring = false
-            else
-                this.acquireLeadership()
-    }
-    recvHeartbeat(fromUID, ballotID) {
-        //console.log('recv heartbeat')
-
-        if ( fromUID !== this.leaderUID) {//ballotID < this.leaderBallotID) { // ballotID < this.leaderBallotID
-            // new leader!
-            this.acquiring = false
-            // var oldLeaderUID = this.leaderUID
-            this.leaderUID = fromUID
-            this.leaderBallotID = ballotID
-            if (this.isLeader && fromUID !== this.uid) {
-                this.isLeader = false
-                this.onLeaderChange(this.isLeader)
-                //this.messenger.onLeadershipLost()
-                //this.observeProposal(fromUID, ballotID)
-                this.nextBallotNum = ballotID.num + 1
-            }
-            //this.messenger.onLeadershipChange(oldLeaderUID, fromUID)
-        }
-        else { //if ( ballotID === this.leaderBallotID) {
-            // no leader change
-            this.timeLastHB = Date.now()
-        }
-    }
-    pulse() {
-        if (this.isLeader) {
-            // confirm we're still the leader
-            this.recvHeartbeat(this.uid, this.ballotID)
-            // tell everyone we're still the leader
-            this.send('heartbeat', this.ballotID)
-            // call this function again after a sleep for 1 second
-            setTimeout(this.pulse.bind(this), 1000)
-        }
     }
     acquireLeadership() {
         console.log('acquiring leadership')
