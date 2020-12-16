@@ -2,13 +2,15 @@
 
 Love collaboration? Hate Google spying on you? Use a truly decentralized, collaborative document editor!
 
+This project also has a server, in a different repo: https://github.com/will-jac/paxos-server
+
+All the documentation is here, however.
+
 ## Overview
 
 The Paxos document editor connects users (each individual browser tab that has the document loaded) together using the Paxos Protocol, which guarantees consistency among users.
 
 ## Technical Details
-
-### Paxos
 
 Paxos is a complicated consensus protocol. In the basic algorithm, a set of priests communicate via messages to pass decrees. The protocol guarantees that all priests will record the same decrees in the same order in their ledgers.
 
@@ -27,13 +29,21 @@ Additionally, because the only important component of phase 1 is leader selectio
 
 This entire project is written in JavaScript. It is decomposed into three components: the display code, the messenging code, and the code that runs the paxos protocol.
 
+#### Display
+
 The display code for this project is written in React, a JavaScript library that allows embedding HTML inside of JavaScript via JSX fragments. React handles the state of the webpage, automatically reloading only the components that have changed, which allows updating stateful components without reloading the entire webpage. For the actual text editor, a React-ified [fork](https://github.com/zenoamaro/react-quill/) of the [Quill](https://quilljs.com/) text editor is used.
 
 Quill is an excellent library that which exposes an `onchange` function handle for when the editor has any content changes, which is used to call the Paxos code.
 
+#### Messaging
+
 Two messaging libraries are used in this project. The primary messenging library is [peerjs](peerjs.com), which permits (mostly) serverless, peer to peer communication between browsers. A central server is required for connection initialization and for use as a fallback in the case of firewalls and reverse network proxies. To connect to the central server, [socket.io](socket.io) is used, which is an easy to use, event based messaging libary. Both peerjs and socket.io use websockets for their connections.
 
 The connection to the server is used to connect a priest to all the others. After all the peers have connected to each other, the underlying websocket manages most of the important components of the connnection, such as sending heatbeats, which is important for maintaining the leader in Paxos.
+
+Both peerjs and socket.io initially connect to a [central server](https://github.com/will-jac/paxos-server). The server simply listens for an incoming connection and responds with the list of clients to connect to (their uuids). It also notifies all other connected clients when  disconnections occur (the connecting cient notifies all the others on connection).
+
+#### Paxos
 
 The actual Paxos implemnation is heavily inspired by three papers:
 
@@ -53,4 +63,15 @@ The Paxos Node acts simultaneously acts as a Replica, Acceptor, and Learner. At 
 
 Initially, I had planned on implementing [Fast Paxos](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/tr-2005-112.pdf), a variant of Paxos where (1) decrees are passed in two message delays and (2) the *state* is kept consistent, but the underlying sequence of operations can differ. However, due to issues with the Quill editor library (requires passing the entire state of the editor rather than a delta of what was changed) and difficulties implementing Fast Paxos (which seems to nearly double the number of corner cases present in Paxos!), I did not implement this.
 
+## Running the project
 
+First, install [nodeJS](https://nodejs.org/en/) and [npm](https://www.npmjs.com/).
+
+Then, clone this repo and the [sever](https://github.com/will-jac/paxos-server), and run:
+
+```{bash}
+npm install
+npm start
+```
+
+from seperate terminals inside the root folder of each project. Then, make sure to open localhost:3000 in *Google Chome*, there is a bug with peerjs in firefox and the project may not work.
