@@ -73,7 +73,7 @@ class PaxosNode {
                 decisions: JSON.stringify(this.decisions)
             })
         }
-        passOliveDecrees()
+        this.passOliveDecrees()
     }
     // when anyone joins, immediately pass window # of null decrees
     passOliveDecrees() {
