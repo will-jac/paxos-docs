@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 import App from './App';
-import PeerMessenger from './paxos2/PMMCMessenger';
+import PeerMessenger from './paxos/PaxosMessenger';
 
 import reportWebVitals from './reportWebVitals';
 

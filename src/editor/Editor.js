@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactQuill from 'react-quill';
-import PaxosNode from './../paxos2/PaxosMMC';
+import PaxosNode from './../paxos/Paxos';
 
 import { RiVipCrownLine, RiVipCrownFill } from 'react-icons/ri';
 
@@ -8,7 +8,6 @@ import 'react-quill/dist/quill.snow.css';
 import 'react-quill/dist/quill.bubble.css';
 
 import './../App.css';
-import './Editor.css';
 
 
 class Editor extends React.Component {
